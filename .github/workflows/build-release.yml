@@ -28,11 +28,18 @@ jobs:
             libxinerama-dev
       - name: Build Linux binary
         run: make build-linux
+      - name: Build Debian package
+        run: make build-deb
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: hoi4treesnap-linux-amd64
           path: dist/hoi4treesnap-linux-amd64
+      - name: Upload Debian package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoi4treesnap-deb
+          path: dist/hoi4treesnap_*_amd64.deb
 
   build-windows:
     runs-on: windows-latest
@@ -68,6 +75,11 @@ jobs:
         with:
           name: hoi4treesnap-linux-amd64
           path: dist
+      - name: Download Debian package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hoi4treesnap-deb
+          path: dist
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
@@ -78,4 +90,5 @@ jobs:
         with:
           files: |
             dist/hoi4treesnap-linux-amd64
+            dist/hoi4treesnap_*_amd64.deb
             dist/hoi4treesnap-windows-amd64.exe

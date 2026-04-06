@@ -89,9 +89,19 @@ Linux builds auto-detect the base game at these locations before falling back to
 1. `~/.steam/steam/steamapps/common/Hearts of Iron IV`
 2. `~/.var/app/com.valvesoftware.Steam/data/Steam/steamapps/common/Hearts of Iron IV`
 
+## Downloads
+
+All release binaries are available on the [releases page](https://github.com/cpntodd/hoi4treesnap/releases).
+
+| Platform | File | Notes |
+| -------- | ---- | ----- |
+| Linux (raw binary) | `hoi4treesnap-linux-amd64` | Mark executable with `chmod +x` then run directly |
+| Linux (Debian/Ubuntu) | `hoi4treesnap_<version>_amd64.deb` | Install with `sudo dpkg -i hoi4treesnap_<version>_amd64.deb`; binary placed at `/usr/bin/hoi4treesnap` |
+| Windows | `hoi4treesnap-windows-amd64.exe` | Run directly; no installation required |
+
 ## How to use
 
-1. Download and run the latest binary from [the releases page](https://github.com/cpntodd/hoi4treesnap/releases).
+1. Download the appropriate binary for your platform from the [releases page](https://github.com/cpntodd/hoi4treesnap/releases) (see Downloads table above).
 2. Select one or more focus tree files, or a folder containing them, from `/common/national_focus`.
 3. Select the Hearts of Iron IV game folder. It will be saved for later use after the first time if auto-detection did not find it.
 4. If you need other mods (dependencies, for example), select those too.
