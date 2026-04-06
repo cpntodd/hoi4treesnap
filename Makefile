@@ -18,7 +18,7 @@ build-deb: build-linux
 	mkdir -p $(DEB_STAGING)/DEBIAN $(DEB_STAGING)/usr/bin
 	cp $(LINUX_BINARY) $(DEB_STAGING)/usr/bin/$(APP_NAME)
 	chmod 0755 $(DEB_STAGING)/usr/bin/$(APP_NAME)
-	printf 'Package: %s\nVersion: %s\nArchitecture: amd64\nMaintainer: cpntodd\nDescription: Hearts of Iron IV focus tree screenshot generator\n' \
+	printf 'Package: %s\nVersion: %s\nSection: utils\nPriority: optional\nArchitecture: amd64\nMaintainer: cpntodd <cpntodd@users.noreply.github.com>\nDescription: Hearts of Iron IV focus tree screenshot generator\n' \
 		$(APP_NAME) $(VERSION) > $(DEB_STAGING)/DEBIAN/control
 	dpkg-deb --build --root-owner-group $(DEB_STAGING) $(DEB_PACKAGE)
 	rm -rf $(DEB_STAGING)

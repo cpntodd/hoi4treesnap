@@ -19,6 +19,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            dpkg-dev \
             libgl1-mesa-dev \
             libx11-dev \
             libxrandr-dev \
