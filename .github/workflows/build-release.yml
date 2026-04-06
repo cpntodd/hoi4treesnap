@@ -1,0 +1,81 @@
+name: build-release
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install Linux GUI dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxxf86vm-dev \
+            libxi-dev \
+            libxcursor-dev \
+            libxinerama-dev
+      - name: Build Linux binary
+        run: make build-linux
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoi4treesnap-linux-amd64
+          path: dist/hoi4treesnap-linux-amd64
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build Windows binary
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'amd64'
+          go build -trimpath -ldflags='-s -w' -o dist/hoi4treesnap-windows-amd64.exe .
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoi4treesnap-windows-amd64
+          path: dist/hoi4treesnap-windows-amd64.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build-linux
+      - build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hoi4treesnap-linux-amd64
+          path: dist
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hoi4treesnap-windows-amd64
+          path: dist
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/hoi4treesnap-linux-amd64
+            dist/hoi4treesnap-windows-amd64.exe

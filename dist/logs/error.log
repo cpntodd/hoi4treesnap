@@ -1,0 +1,20 @@
+[2026-04-06T12:21:52+08:00]
+Skipped malformed focus files:
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/afghanistan.txt": [001990] (l:286, c:47): unexpected '|'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/TSR_lingguang_incident_joint_branch.txt": [001de2] (l:460, c:1): unexpected '}'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/china_communist_sea.txt": [034009] (l:10291, c:58): unexpected '['
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/germany.txt": [006d24] (l:1157, c:47): unexpected '|'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/iraq.txt": [000d4c] (l:180, c:48): unexpected '|'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/finland.txt": [03e636] (l:10416, c:48): unexpected '|'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/portugal.txt": [004fa6] (l:952, c:49): unexpected '|'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/soviet.txt": [00cde1] (l:2027, c:48): unexpected '|'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/india_goe.txt": [0500d7] (l:11343, c:48): unexpected '|'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/sweden.txt": [007555] (l:1534, c:49): unexpected '|'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/uruguay.txt": [001e91] (l:364, c:48): unexpected '|'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/philippines.txt": [02f571] (l:8834, c:39): unexpected '|'
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/italy.txt": [066c33] (l:17396, c:111): unexpected '='
+Skipping malformed focus file "/mnt/Data/Projects/mod/Hearts of Iron IV/common/national_focus/japan.txt": [080f16] (l:25813, c:47): unexpected '|'
+
+[2026-04-06T12:46:10+08:00]
+[00007d] (l:6, c:23): unexpected '%'
+

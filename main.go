@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"image"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -12,7 +13,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/macroblock/imed/pkg/ptool"
 	"github.com/malashin/bmfonter"
-	_ "github.com/malashin/dds"
+	_ "github.com/xypwn/filediver/dds"
+	_ "golang.org/x/image/bmp"
+	_ "golang.org/x/image/webp"
 
 	// TGA must be the last registered image format due to not having magic prefix.
 	// Every image file will be treated as TGA if registered magic is not found.
@@ -21,9 +24,13 @@ import (
 
 var focusTreePaths, modPaths []string
 var gamePath, binPath string
-var running, isLineRenderingOff bool
+var logsPath, appLogPath string
+var running, isLineRenderingOff, isBackgroundRenderingOn bool
 var win fyne.Window
 var pBar *widget.ProgressBar
+var focusFilesLabel *widget.Label
+var gamePathLabel *widget.Label
+var modPathsLabel *widget.Label
 
 var language = "l_english"
 var spacingX = 131
@@ -73,7 +80,6 @@ var DLR image.Image
 var UDLR image.Image
 
 var pdx *ptool.TParser
-var yml *ptool.TParser
 
 var utf8bom = []byte{0xEF, 0xBB, 0xBF}
 
@@ -187,6 +193,14 @@ func main() {
 		panic(err)
 	}
 	binPath = filepath.Dir(bin)
+
+	if maybeRunWorkerMode() {
+		return
+	}
+
+	closeLog := initLogger()
+	defer closeLog()
+	slog.Info("hoi4treesnap starting", "bin_path", binPath)
 
 	app := app.New()
 	setupUI(app)

@@ -4,16 +4,13 @@ import (
 	"fmt"
 	"image"
 	"io/fs"
-	"io/ioutil"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/widget"
+	fynedialog "fyne.io/fyne/v2/dialog"
 	"github.com/k0kubun/go-ansi"
 	"github.com/macroblock/imed/pkg/ptool"
 	"github.com/malashin/bmfonter"
@@ -31,7 +28,7 @@ func nodesToString(node *ptool.TNode) []string {
 }
 
 func readFile(path string) (string, error) {
-	f, err := ioutil.ReadFile(path)
+	f, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
@@ -53,7 +50,7 @@ func encodeCacheFile(i interface{}, path string) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(path, buf.Bytes(), 0755)
+	err = os.WriteFile(path, buf.Bytes(), 0o644)
 	if err != nil {
 		return err
 	}
@@ -62,7 +59,7 @@ func encodeCacheFile(i interface{}, path string) error {
 }
 
 func decodeCacheFile(i interface{}, path string) error {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -408,11 +405,11 @@ func initFont(fontName string) (bmfonter.Font, error) {
 	var font bmfonter.Font
 	bmfont, ok := fontMap[fontName]
 	if !ok {
-		return font, fmt.Errorf("font \"" + fontName + "\" not found")
+		return font, fmt.Errorf("font %q not found", fontName)
 	}
 
 	if len(bmfont.Fontfiles) < 1 {
-		return font, fmt.Errorf("font \"" + fontName + "\" has no associated files")
+		return font, fmt.Errorf("font %q has no associated files", fontName)
 	}
 
 	// Init font.
@@ -432,25 +429,16 @@ func initFont(fontName string) (bmfonter.Font, error) {
 }
 
 func showError(err error) {
+	slog.Error("error", "msg", err.Error())
 	ansi.Println("\x1b[31;1m" + err.Error() + "\x1b[0m")
-
-	w := fyne.CurrentApp().NewWindow("Error")
-	w.SetContent(fyne.NewContainerWithLayout(layout.NewCenterLayout(), widget.NewLabel(err.Error())))
-
-	w.SetContent(
-		container.NewVBox(
-			widget.NewLabel(err.Error()),
-			widget.NewButton("Ok", func() { w.Close() }),
-		),
-	)
-
-	w.CenterOnScreen()
-	w.Show()
-	w.RequestFocus()
-
-	pBar.Hide()
-	pBar.SetValue(0)
-	running = false
+	if logPath, logErr := writeDiagnosticLog("error.log", err.Error()); logErr != nil {
+		slog.Warn("failed to write error log", "error", logErr.Error())
+	} else {
+		slog.Info("error details saved", "path", logPath)
+	}
+	uiDo(func() {
+		fynedialog.ShowError(err, win)
+	})
 	return
 }
 

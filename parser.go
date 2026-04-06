@@ -2,10 +2,9 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"image"
+	"log/slog"
 	"math"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -21,8 +20,8 @@ var pdxRule = `
 	comparison           = lval @operators rval [';'] [@comment];
 	list                 = @anyType {@anyType} [';']  [@comment];
 
-	lval                 = @date|@int|@var|'"'#@string#'"';
-	rval                 = @date|@hex|@percent|@var|@number|'"'#@string#'"';
+	lval                 = @var|@date|@int|'"'#@string#'"';
+	rval                 = @var|@date|@hex|@percent|@number|'"'#@string#'"';
 
 	scope                = '{' (scopeBody|@empty) ('}'|empty);
 	scopeBody            = (@declr|@declrScope|@comparison|@list){@declr|@declrScope|@comparison|@list};
@@ -31,61 +30,36 @@ var pdxRule = `
 	int                  = ['-']digit#{#digit};
 	float                = ['-'][int]#'.'#int;
 	number               = float|int;
-	percent              = int#'%'#'%';
+	percent              = number#'%';
 	string               = {!'"'#stringChar};
 	var                  = symbol#{#symbol};
 	date                 = int#'.'#int#'.'#int#['.'#int];
 	bool                 = 'yes'|'no';
 	hex                  = '0x'#(digit|letter)(digit|letter)(digit|letter)(digit|letter)(digit|letter)(digit|letter)(digit|letter)(digit|letter);
-	anyType              = number|percent|'"'#string#'"'|var|date|bool|hex;
+	anyType              = percent|number|'"'#string#'"'|var|date|bool|hex;
 
 	                     = {spaces|@comment};
 	spaces               = \x00..\x20;
 	anyRune              = \x00..$;
 	digit                = '0'..'9';
 	letter               = 'a'..'z'|'A'..'Z'|'а'..'я'|'А'..'Я'|\u00c0..\u00d6|\u00d8..\u00f6|\u00f8..\u00ff|\u0100..\u017f|\u0180..\u024f|\u0400..\u04ff|\u0500..\u052f;
-	operators            = '<'|'>';
-	symbol               = digit|letter|'_'|':'|'@'|'.'|'-'|'^'|\u0027;
+	operators            = '>='|'<='|'!='|'=='|'<'|'>';
+	symbol               = digit|letter|'_'|':'|'@'|'.'|'-'|'^'|'|'|'['|']'|'?'|\u0027;
 	stringChar           = ('\"'|anyRune);
 	empty                = '';
 `
 
 // pair                 = @key ':' [@number] '"'#@value#'"' [@comment];
 
-var ymlRule = `
-	entry                = @language#':' {@pair};
-
-	pair                 = @key ':' [@number] @value [@comment];
-	comment              = '#'#{#!\x0a#!\x0d#!$#anyRune};
-
-	language             = 'l_'#symbol#{#symbol};
-	key                  = symbol#{#symbol};
-	number               = digit#{#digit};
-	value                = '"'#{#anyRune};
-
-	                     = {spaces|@comment};
-	spaces               = \x00..\x20;
-	anyRune              = \x00..\x09|\x0b..\x0c|\x0e..$;
-	digit                = '0'..'9';
-	letter               = 'a'..'z'|'A'..'Z'|'а'..'я'|'А'..'Я'|\u00c0..\u00d6|\u00d8..\u00f6|\u00f8..\u00ff|\u0100..\u017f|\u0180..\u024f|\u0400..\u04ff|\u0500..\u052f;
-	symbol               = digit|letter|'_'|'@'|'.'|'-';
-	empty                = '';
-`
-
 func parseFocus(path string) error {
-	fmt.Println(path)
+	slog.Debug("parsing focus file", "path", path)
 	f, err := readFile(path)
 	if err != nil {
 		return err
 	}
 
 	if len(f) > 0 {
-		// Remove utf-8 bom if found.
-		if bytes.HasPrefix([]byte(f), utf8bom) {
-			f = string(bytes.TrimPrefix([]byte(f), utf8bom))
-		}
-
-		node, err := pdx.Parse(f)
+		node, err := parsePdxSource(f)
 		if err != nil {
 			return err
 		}
@@ -220,7 +194,6 @@ func traverseFocus(root *ptool.TNode) error {
 
 func parseGUI(path string) error {
 	fPath := filepath.Join(path, "interface", "nationalfocusview.gui")
-	fmt.Println(fPath)
 
 	f, err := readFile(fPath)
 	if err != nil {
@@ -228,12 +201,7 @@ func parseGUI(path string) error {
 	}
 
 	if len(f) > 0 {
-		// Remove utf-8 bom if found.
-		if bytes.HasPrefix([]byte(f), utf8bom) {
-			f = string(bytes.TrimPrefix([]byte(f), utf8bom))
-		}
-
-		node, err := pdx.Parse(f)
+		node, err := parsePdxSource(f)
 		if err != nil {
 			return err
 		}
@@ -245,6 +213,145 @@ func parseGUI(path string) error {
 		}
 	}
 	return nil
+}
+
+func parsePdxSource(input string) (*ptool.TNode, error) {
+	normalized := normalizePdxSource(input)
+	node, err := pdx.Parse(normalized)
+	if err != nil && strings.Contains(err.Error(), "unexpected '}'") {
+		normalized = stripUnmatchedClosingBraces(normalized)
+		node, err = pdx.Parse(normalized)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+func normalizePdxSource(input string) string {
+	if bytes.HasPrefix([]byte(input), utf8bom) {
+		input = string(bytes.TrimPrefix([]byte(input), utf8bom))
+	}
+	return stripNumericPercentSuffixes(input)
+}
+
+func stripNumericPercentSuffixes(input string) string {
+	var b strings.Builder
+	b.Grow(len(input))
+
+	inString := false
+	inComment := false
+	escaped := false
+	lastNonSpace := rune(0)
+
+	for _, r := range input {
+		switch {
+		case inComment:
+			b.WriteRune(r)
+			if r == '\n' || r == '\r' {
+				inComment = false
+			}
+			continue
+		case inString:
+			b.WriteRune(r)
+			if escaped {
+				escaped = false
+				continue
+			}
+			if r == '\\' {
+				escaped = true
+				continue
+			}
+			if r == '"' {
+				inString = false
+			}
+			continue
+		}
+
+		if r == '#' {
+			inComment = true
+			b.WriteRune(r)
+			continue
+		}
+		if r == '"' {
+			inString = true
+			b.WriteRune(r)
+			lastNonSpace = r
+			continue
+		}
+		if r == '%' && lastNonSpace >= '0' && lastNonSpace <= '9' {
+			continue
+		}
+
+		b.WriteRune(r)
+		if r > ' ' {
+			lastNonSpace = r
+		}
+	}
+
+	return b.String()
+}
+
+func stripUnmatchedClosingBraces(input string) string {
+	var b strings.Builder
+	b.Grow(len(input))
+
+	depth := 0
+	inString := false
+	inComment := false
+	escaped := false
+
+	for _, r := range input {
+		switch {
+		case inComment:
+			b.WriteRune(r)
+			if r == '\n' || r == '\r' {
+				inComment = false
+			}
+			continue
+		case inString:
+			b.WriteRune(r)
+			if escaped {
+				escaped = false
+				continue
+			}
+			if r == '\\' {
+				escaped = true
+				continue
+			}
+			if r == '"' {
+				inString = false
+			}
+			continue
+		}
+
+		if r == '#' {
+			inComment = true
+			b.WriteRune(r)
+			continue
+		}
+		if r == '"' {
+			inString = true
+			b.WriteRune(r)
+			continue
+		}
+		if r == '{' {
+			depth++
+			b.WriteRune(r)
+			continue
+		}
+		if r == '}' {
+			if depth == 0 {
+				continue
+			}
+			depth--
+			b.WriteRune(r)
+			continue
+		}
+		b.WriteRune(r)
+	}
+
+	return b.String()
 }
 
 func traverseGUI(root *ptool.TNode) error {
@@ -744,14 +851,9 @@ func parseGFX(path string, i int) error {
 		}
 
 		if stringContainsSlice(f, gfxList) {
-			fmt.Println(fPath)
+			slog.Debug("parsing GFX file", "path", fPath)
 			if len(f) > 0 {
-				// Remove utf-8 bom if found.
-				if bytes.HasPrefix([]byte(f), utf8bom) {
-					f = string(bytes.TrimPrefix([]byte(f), utf8bom))
-				}
-
-				node, err := pdx.Parse(f)
+				node, err := parsePdxSource(f)
 				if err != nil {
 					return err
 				}
@@ -763,7 +865,7 @@ func parseGFX(path string, i int) error {
 				}
 			}
 		}
-		pBar.SetValue(pBar.Value + 0.4/float64(i)/float64(len(gfxFiles)))
+		addProgress(0.4 / float64(i) / float64(len(gfxFiles)))
 	}
 	return nil
 }
@@ -843,20 +945,11 @@ func traverseGFX(root *ptool.TNode, path string) error {
 }
 
 func parseLoc(path string, i int) error {
+	// WalkMatchExt already recurses into sub-directories (including replace/).
 	locFiles, err := WalkMatchExt(filepath.Join(path, "localisation"), ".yml")
 	if err != nil {
 		return err
 	}
-
-	var locReplaceFiles []string
-	if _, err := os.Stat(filepath.Join(path, "localisation", "replace")); os.IsExist(err) {
-		locReplaceFiles, err = WalkMatchExt(filepath.Join(path, "localisation", "replace"), ".yml")
-		if err != nil {
-			return err
-		}
-	}
-
-	locFiles = append(locFiles, locReplaceFiles...)
 
 	for _, lPath := range locFiles {
 		f, err := readFile(lPath)
@@ -875,56 +968,97 @@ func parseLoc(path string, i int) error {
 					continue
 				}
 
-				fmt.Println(lPath)
-
-				node, err := yml.Parse(f)
-				if err != nil {
-					return err
-				}
-				_ = node
-				// fmt.Println(ptool.TreeToString(node, yml.ByID))
-
-				err = traverseLoc(node)
-				if err != nil {
-					return err
-				}
+				slog.Debug("parsing localisation file", "path", lPath)
+				before := len(locMap[language])
+				parseLocFile(f)
+				slog.Debug("loaded localisation entries", "path", lPath, "new", len(locMap[language])-before)
 			}
 		}
-		pBar.SetValue(pBar.Value + 0.4/float64(i)/float64(len(locFiles)))
+		addProgress(0.4 / float64(i) / float64(len(locFiles)))
 	}
 	return nil
 }
 
-func traverseLoc(root *ptool.TNode) error {
+// parseLocFile parses a HOI4 localisation YML file using a fast line-by-line
+// scanner instead of the PEG parser, which has O(n²) complexity for large files.
+// Format per line (after the language header):
+//
+//	KEY:NUMBER "VALUE"   (number is optional)
+//	KEY: "VALUE"
+func parseLocFile(content string) {
 	lang := "l_english"
-	for _, node := range root.Links {
-		nodeType := yml.ByID(node.Type)
-		switch nodeType {
-		case "language":
-			lang = node.Value
-			if _, ok := locMap[lang]; !ok {
-				locMap[lang] = make(map[string]Localisation)
+	first := true
+	for _, rawLine := range strings.Split(content, "\n") {
+		line := strings.TrimRight(rawLine, "\r")
+
+		if first {
+			// First non-empty, non-comment line is the language declaration.
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
 			}
-		case "pair":
-			var l Localisation
-			for _, link := range node.Links {
-				nodeType := yml.ByID(link.Type)
-				switch nodeType {
-				case "key":
-					l.Key = link.Value
-				case "number":
-					l.Number = link.Value
-				case "value":
-					l.Value = trimQuotes(link.Value)
+			if idx := strings.Index(trimmed, ":"); idx > 0 {
+				lang = trimmed[:idx]
+				if _, ok := locMap[lang]; !ok {
+					locMap[lang] = make(map[string]Localisation)
 				}
 			}
-			locMap[lang][l.Key] = l
-		default:
-			err := traverseLoc(node)
-			if err != nil {
-				return err
+			first = false
+			continue
+		}
+
+		// Skip blank lines and comments.
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		// Find the key (everything up to the first ':').
+		colonIdx := strings.Index(trimmed, ":")
+		if colonIdx <= 0 {
+			continue
+		}
+		key := trimmed[:colonIdx]
+		// Key must consist only of word characters; skip scope/other lines.
+		if !isLocKey(key) {
+			continue
+		}
+
+		rest := strings.TrimSpace(trimmed[colonIdx+1:])
+
+		// Skip optional numeric version field (e.g. "0 ").
+		if len(rest) > 0 && rest[0] >= '0' && rest[0] <= '9' {
+			spaceIdx := strings.IndexByte(rest, ' ')
+			if spaceIdx < 0 {
+				continue
 			}
+			rest = strings.TrimSpace(rest[spaceIdx+1:])
+		}
+
+		// Value must start with a double-quote.
+		if len(rest) == 0 || rest[0] != '"' {
+			continue
+		}
+		// Strip the leading quote; strip trailing quote if present.
+		val := rest[1:]
+		if len(val) > 0 && val[len(val)-1] == '"' {
+			val = val[:len(val)-1]
+		}
+
+		locMap[lang][key] = Localisation{Key: key, Value: val}
+	}
+}
+
+// isLocKey returns true if s looks like a valid HOI4 localisation key.
+func isLocKey(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-' || c == '@') {
+			return false
 		}
 	}
-	return nil
+	return true
 }

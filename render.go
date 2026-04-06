@@ -5,16 +5,17 @@ import (
 	"image"
 	"image/draw"
 	"math"
+	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
+	"unicode"
 )
 
 func renderFocus(dst draw.Image, x, y int, id string) error {
 	f, ok := focusMap[id]
 	if !ok {
-		return fmt.Errorf("focus id \"" + id + "\" not found")
+		return fmt.Errorf("focus id %q not found", id)
 	}
 
 	if !f.AllowBranch {
@@ -39,7 +40,15 @@ func renderFocus(dst draw.Image, x, y int, id string) error {
 
 	err = renderSprite(dst, x+gui.Symbol.Position.X, y+gui.Symbol.Position.Y, gui.Symbol.Orientation, gui.Symbol.CenterPosition, symbol)
 	if err != nil {
-		return fmt.Errorf("%v: %v", symbol.TextureFile, err)
+		slog.Warn("failed to render focus icon, trying fallback", "focus_id", f.ID, "icon", f.Icon, "texture", symbol.TextureFile, "error", err.Error())
+		fallback, ok := gfxMap["GFX_goal_unknown"]
+		if !ok {
+			return fmt.Errorf("%v: %v", symbol.TextureFile, err)
+		}
+		fallbackErr := renderSprite(dst, x+gui.Symbol.Position.X, y+gui.Symbol.Position.Y, gui.Symbol.Orientation, gui.Symbol.CenterPosition, fallback)
+		if fallbackErr != nil {
+			return fmt.Errorf("%v: %v", fallback.TextureFile, fallbackErr)
+		}
 	}
 
 	text := f.Text
@@ -56,9 +65,89 @@ func renderFocus(dst draw.Image, x, y int, id string) error {
 		textY += gui.Name.MaxHeight / 2
 	}
 
-	font.RenderTextBox(dst, textX, textY, gui.Name.MaxWidth+2, gui.Name.MaxHeight, true, true, locMap[language][text].Value)
+	displayText := locMap[language][text].Value
+	if displayText == "" {
+		// Fall back to a humanized localisation key so labels stay readable.
+		slog.Debug("no localisation found", "key", text, "id", f.ID, "language", language)
+		displayText = humanizeFocusLabel(text)
+	} else if looksLikeLocKey(displayText) {
+		// Some localisation files contain unresolved/raw keys as values.
+		// Normalize those too so the image remains readable.
+		displayText = humanizeFocusLabel(displayText)
+	}
+	font.RenderTextBox(dst, textX, textY, gui.Name.MaxWidth+2, gui.Name.MaxHeight, true, true, displayText)
 
 	return nil
+}
+
+func humanizeFocusLabel(key string) string {
+	if key == "" {
+		return key
+	}
+
+	// Remove country-tag style prefixes (e.g. AUS_, MAC_) for readability.
+	if idx := strings.IndexByte(key, '_'); idx > 0 {
+		prefix := key[:idx]
+		if isTagPrefix(prefix) && len(prefix) >= 2 && len(prefix) <= 4 {
+			key = key[idx+1:]
+		}
+	}
+
+	replacer := strings.NewReplacer("_", " ", "-", " ", ".", " ")
+	parts := strings.Fields(replacer.Replace(key))
+	if len(parts) == 0 {
+		return key
+	}
+
+	for i, part := range parts {
+		runes := []rune(strings.ToLower(part))
+		if len(runes) == 0 {
+			continue
+		}
+		runes[0] = unicode.ToUpper(runes[0])
+		parts[i] = string(runes)
+	}
+
+	return strings.Join(parts, " ")
+}
+
+func isTagPrefix(s string) bool {
+	if s == "" {
+		return false
+	}
+	hasLetter := false
+	for _, r := range s {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+				hasLetter = true
+			}
+			continue
+		}
+		return false
+	}
+	return hasLetter
+}
+
+func looksLikeLocKey(s string) bool {
+	if s == "" {
+		return false
+	}
+	// Human-readable localisation usually contains spaces.
+	if strings.ContainsRune(s, ' ') {
+		return false
+	}
+	// Key-like values usually contain separators.
+	if !strings.ContainsAny(s, "_-.") {
+		return false
+	}
+	for _, r := range s {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') ||
+			(r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func renderSprite(dst draw.Image, x, y int, orientation, centerPosition string, sprite SpriteType) error {
@@ -225,19 +314,39 @@ func renderExclusiveLines(dst *image.RGBA) error {
 
 func renderLines(dst *image.RGBA) error {
 	var err error
-	// Load the textures.
-	UD, UDdash, err = readTextureAndGetFrames("GFX_focus_link_up_down", 3, 4)
-	UL, ULdash, err = readTextureAndGetFrames("GFX_focus_link_up_left", 3, 4)
-	UR, URdash, err = readTextureAndGetFrames("GFX_focus_link_up_right", 3, 4)
-	DL, DLdash, err = readTextureAndGetFrames("GFX_focus_link_down_left", 3, 4)
-	DR, DRdash, err = readTextureAndGetFrames("GFX_focus_link_down_right", 3, 4)
-	LR, LRdash, err = readTextureAndGetFrames("GFX_focus_link_left_right", 3, 4)
-	UDL, UDLdash, err = readTextureAndGetFrames("GFX_focus_link_up_down_left", 3, 4)
-	UDR, UDRdash, err = readTextureAndGetFrames("GFX_focus_link_up_down_right", 3, 4)
-	ULR, ULRdash, err = readTextureAndGetFrames("GFX_focus_link_up_left_right", 3, 4)
-	DLR, DLRdash, err = readTextureAndGetFrames("GFX_focus_link_down_left_right", 3, 4)
-	UDLR, UDLRdash, err = readTextureAndGetFrames("GFX_focus_link_up_down_left_right", 3, 4)
-	if err != nil {
+	// Load the textures — each call must be checked individually; sharing err
+	// across assignments silently discards all but the last error.
+	if UD, UDdash, err = readTextureAndGetFrames("GFX_focus_link_up_down", 3, 4); err != nil {
+		return err
+	}
+	if UL, ULdash, err = readTextureAndGetFrames("GFX_focus_link_up_left", 3, 4); err != nil {
+		return err
+	}
+	if UR, URdash, err = readTextureAndGetFrames("GFX_focus_link_up_right", 3, 4); err != nil {
+		return err
+	}
+	if DL, DLdash, err = readTextureAndGetFrames("GFX_focus_link_down_left", 3, 4); err != nil {
+		return err
+	}
+	if DR, DRdash, err = readTextureAndGetFrames("GFX_focus_link_down_right", 3, 4); err != nil {
+		return err
+	}
+	if LR, LRdash, err = readTextureAndGetFrames("GFX_focus_link_left_right", 3, 4); err != nil {
+		return err
+	}
+	if UDL, UDLdash, err = readTextureAndGetFrames("GFX_focus_link_up_down_left", 3, 4); err != nil {
+		return err
+	}
+	if UDR, UDRdash, err = readTextureAndGetFrames("GFX_focus_link_up_down_right", 3, 4); err != nil {
+		return err
+	}
+	if ULR, ULRdash, err = readTextureAndGetFrames("GFX_focus_link_up_left_right", 3, 4); err != nil {
+		return err
+	}
+	if DLR, DLRdash, err = readTextureAndGetFrames("GFX_focus_link_down_left_right", 3, 4); err != nil {
+		return err
+	}
+	if UDLR, UDLRdash, err = readTextureAndGetFrames("GFX_focus_link_up_down_left_right", 3, 4); err != nil {
 		return err
 	}
 
@@ -264,13 +373,15 @@ func renderLines(dst *image.RGBA) error {
 
 			// First corner (out).
 			img = p.Out.Get()
-			draw.Draw(dst,
-				image.Rectangle{
-					image.Point{x, y},
-					image.Point{x + img.Bounds().Max.X, y + img.Bounds().Max.Y}},
-				img,
-				image.ZP,
-				draw.Over)
+			if img != nil {
+				draw.Draw(dst,
+					image.Rectangle{
+						image.Point{x, y},
+						image.Point{x + img.Bounds().Max.X, y + img.Bounds().Max.Y}},
+					img,
+					image.ZP,
+					draw.Over)
+			}
 			drawnCoords = append(drawnCoords, image.Point{x, y})
 
 			cornerXvalues := []int{x}
@@ -332,7 +443,7 @@ func renderLines(dst *image.RGBA) error {
 				// Children corner (in).
 				a := c.In[p.Y]
 				img := a.Get()
-				if !containsPoint(drawnCoords, image.Point{x, y}) {
+				if img != nil && !containsPoint(drawnCoords, image.Point{x, y}) {
 					draw.Draw(dst,
 						image.Rectangle{
 							image.Point{x, y},
@@ -413,10 +524,15 @@ func (s *SpriteType) readTexture() error {
 	imgFile, err := os.Open(s.TextureFile)
 	if err != nil {
 		// Try looking for the sprite in other declared mod/game folders.
-		texture := s.TextureFile
+		texture := filepath.Clean(s.TextureFile)
 		for _, p := range modPaths {
-			texture = strings.TrimPrefix(texture, p)
+			base := filepath.Clean(p)
+			if strings.HasPrefix(texture, base+string(os.PathSeparator)) {
+				texture = strings.TrimPrefix(texture, base)
+				break
+			}
 		}
+		texture = strings.TrimLeft(texture, string(os.PathSeparator))
 
 		for i := len(modPaths) - 1; i >= 0; i-- {
 			imgFile, err = os.Open(filepath.Join(modPaths[i], texture))
@@ -439,12 +555,22 @@ TextureFileFound:
 
 func (s *SpriteType) getFrame(f int) (image.Image, error) {
 	if s.Image == nil {
-		return nil, fmt.Errorf(s.Name + " has no image data")
+		return nil, fmt.Errorf("%s has no image data", s.Name)
 	}
 	if f < 1 {
-		return nil, fmt.Errorf("frame number must be higher then 0, it is currently " + strconv.Itoa(f))
+		return nil, fmt.Errorf("frame number must be higher then 0, it is currently %d", f)
 	}
-	frameSize := image.Point{s.Image.Bounds().Max.X / s.NoOfFrames, s.Image.Bounds().Max.Y}
+	frames := s.NoOfFrames
+	if frames <= 0 {
+		frames = 1
+	}
+	if f > frames {
+		return nil, fmt.Errorf("requested frame %d out of %d for %s", f, frames, s.Name)
+	}
+	frameSize := image.Point{s.Image.Bounds().Dx() / frames, s.Image.Bounds().Dy()}
+	if frameSize.X <= 0 || frameSize.Y <= 0 {
+		return nil, fmt.Errorf("invalid frame size %dx%d for %s", frameSize.X, frameSize.Y, s.Name)
+	}
 	dst := image.NewRGBA(image.Rectangle{image.ZP, frameSize})
 	draw.Draw(dst, dst.Bounds(), s.Image, image.Point{frameSize.X * (f - 1), 0}, draw.Src)
 	return dst, nil
