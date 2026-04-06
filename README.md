@@ -63,6 +63,8 @@ Install the required development packages before building:
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
+  pkg-config \
+  libgtk-3-dev \
   libgl1-mesa-dev \
   libx11-dev \
   libxrandr-dev \
