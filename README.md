@@ -145,6 +145,8 @@ GitHub Actions builds Linux and Windows binaries on pushes to `master` and on ve
 ![TreeSnap settings window](menu-2.png)
 
 ## Output examples
-
+**With background rendering**
 ![Output example 1](output_example-1.png)
+
+**Without background rendering**
 ![Output example 2](output_example-2.png)
