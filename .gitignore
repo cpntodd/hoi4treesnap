@@ -15,5 +15,7 @@
 *.png
 !menu-1.png
 !menu-2.png
+!output_example-1.png
+!output_example-2.png
 !icon.png
 hoi4treesnapGamePath.txt

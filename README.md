@@ -146,5 +146,5 @@ GitHub Actions builds Linux and Windows binaries on pushes to `master` and on ve
 
 ## Output examples
 
-![Output example 1](https://i.imgur.com/MKPV5Cc.png)
-![Output example 2](https://i.imgur.com/8Bq71l1.png)
+![Output example 1](output_example-1.png)
+![Output example 2](output_example-2.png)
