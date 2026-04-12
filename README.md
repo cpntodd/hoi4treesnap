@@ -1,5 +1,11 @@
 # hoi4treesnap
 
+![Banner](images/banner-treesnap.png)
+
+![Downloads](https://img.shields.io/github/downloads/cpntodd/hoi4treesnap/total)
+![GitHub stars](https://img.shields.io/github/stars/cpntodd/hoi4treesnap?style=flat-square)
+![GitHub watchers](https://img.shields.io/github/watchers/cpntodd/hoi4treesnap?style=flat-square)
+
 hoi4treesnap generates Hearts of Iron IV focus tree screenshots.
 
 The tool itself does not contain any textures and picks them up from the HOI4 base game or a mod that contains selected focus trees. That includes all focus tree graphics: focus icons, focus tree plaques, focus tree lines and fonts. `nationalfocusview.gui` is being parsed to pick on your changes to it, so the output image looks quite similar to what you see in the game, even a modded one.
@@ -145,8 +151,6 @@ GitHub Actions builds Linux and Windows binaries on pushes to `master` and on ve
 ![TreeSnap settings window](menu-2.png)
 
 ## Output examples
-**With background rendering**
-![Output example 1](output_example-1.png)
 
-**Without background rendering**
+![Output example 1](output_example-1.png)
 ![Output example 2](output_example-2.png)
